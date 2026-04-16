@@ -3,17 +3,45 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
-from app.core.database import engine, Base
+from app.core.database import engine, Base, SessionLocal
 from app.api.routes import auth, agent, admin
 
-# Import models so SQLAlchemy registers them before create_all
-from app.models import user, session  
+from app.core.security import hash_password 
+
+from app.models.user import User
+from app.models.session import AgentSession # Important pour que Base.metadata les voit
+
+def create_admin_user():
+    db = SessionLocal()
+    try:
+        admin_obj = db.query(User).filter(User.username == settings.ADMIN_USERNAME).first()
+        
+        if not admin_obj:
+            print("🚀 Creating initial admin user...")
+            new_admin = User(
+                username=settings.ADMIN_USERNAME,
+                email=settings.ADMIN_EMAIL,
+                hashed_password=hash_password(settings.ADMIN_PASSWORD),
+                role="admin",  
+                is_active=True
+            )
+            db.add(new_admin)
+            db.commit()
+            print(f"✅ Admin '{settings.ADMIN_USERNAME}' created successfully.")
+        else:
+            print(f"ℹ️ Admin user '{settings.ADMIN_USERNAME}' already exists.")
+    except Exception as e:
+        print(f"❌ Error creating admin: {e}")
+    finally:
+        db.close()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create all tables on startup
     Base.metadata.create_all(bind=engine)
-    print("✅ Database tables created")
+    
+    create_admin_user()
+    
+    print("✅ Database tables ready")
     yield
     print("👋 Shutting down AutoAgent API")
 
@@ -23,22 +51,8 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description="""
 ## 🤖 AutoAgent API
-
-An autonomous AI agent API powered by **Gemini** using the **ReAct** (Reasoning + Acting) pattern.
-
-### Features
-- 🔐 JWT Authentication with role-based access (user / admin)
-- 🧠 ReAct agent loop: Think → Act → Observe → Repeat
-- 🛠️ 4 built-in tools: Web Search, Calculator, Weather, Summarizer
-- 💾 Full session history persisted in SQLite
-- 👮 Admin panel to manage users and view all sessions
-
-### Quick Start
-1. `POST /auth/register` — Create your account
-2. `POST /auth/login` — Get your JWT tokens
-3. `POST /agent/run` — Send a task to the agent
-4. `GET /agent/sessions` — View your session history
-    """,
+An autonomous AI agent API powered by **Gemini** using the **ReAct** pattern.
+""",
     lifespan=lifespan,
 )
 
@@ -50,6 +64,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Inclusion des routes
 app.include_router(auth.router)
 app.include_router(agent.router)
 app.include_router(admin.router)
