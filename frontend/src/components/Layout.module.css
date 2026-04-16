@@ -1,0 +1,154 @@
+.shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 220px;
+  min-width: 220px;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+.brandIcon {
+  font-size: 18px;
+  color: var(--accent);
+}
+
+.brandText {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 10px;
+  flex: 1;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: var(--text2);
+  border: 1px solid transparent;
+  transition: all 0.12s;
+  letter-spacing: 0.3px;
+}
+
+.navItem:hover {
+  color: var(--text);
+  background: var(--bg3);
+}
+
+.navActive {
+  color: var(--accent) !important;
+  background: var(--accent-dim) !important;
+  border-color: rgba(0,255,136,0.15) !important;
+}
+
+.navIcon {
+  font-size: 12px;
+  width: 16px;
+  text-align: center;
+}
+
+.bottom {
+  padding: 16px 10px 0;
+  border-top: 1px solid var(--border);
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.userCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+}
+
+.userAvatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  border: 1px solid rgba(0,255,136,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.userInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.userName {
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.userRole {
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 1px;
+}
+
+.logoutBtn {
+  width: 100%;
+  padding: 7px 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text3);
+  font-size: 12px;
+  border-radius: var(--radius);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.12s;
+  letter-spacing: 0.3px;
+}
+
+.logoutBtn:hover {
+  color: var(--red);
+  border-color: rgba(255,77,77,0.3);
+  background: var(--red-dim);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
