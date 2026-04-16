@@ -4,7 +4,7 @@ AutoAgent-API is an autonomous AI agent platform based on the **ReAct (Reasoning
 It leverages **Gemini 2.5 Flash** to break down complex tasks into logical steps, use tools in real time, and return structured final answers.
 
 ---
-## Screenshots
+## 📸 Screenshots
 
 ### Authentication
 
@@ -39,9 +39,9 @@ It leverages **Gemini 2.5 Flash** to break down complex tasks into logical steps
 ![History](./screenshots/historique.png)
 
 ---
-## Features
+## 🚀 Features
 
-### 🧠 ReAct Engine (Reasoning + Acting)
+### ReAct Engine (Reasoning + Acting)
 
 An intelligent reasoning loop:
 - **Thought** → reasoning step  
@@ -51,7 +51,7 @@ An intelligent reasoning loop:
 
 ---
 
-### 🛠️ Integrated Toolset
+### Integrated Toolset
 
 - **Calculator** → Accurate mathematical computations  
 - **Weather** → Real-time weather data  
@@ -61,7 +61,7 @@ An intelligent reasoning loop:
 
 ---
 
-### 🔐 Authentication
+### Authentication
 
 - JWT (**Access + Refresh tokens**)  
 - Role-based access:
@@ -70,7 +70,7 @@ An intelligent reasoning loop:
 
 ---
 
-### 📊 Persistence & History
+### Persistence & History
 
 - Session storage  
 - Full reasoning trace (ReAct steps)  
