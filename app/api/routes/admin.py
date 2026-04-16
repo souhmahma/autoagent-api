@@ -79,3 +79,4 @@ def stats(
         "failed_sessions": failed,
         "success_rate": round((completed / total_sessions * 100) if total_sessions > 0 else 0, 1),
     }
+ 
