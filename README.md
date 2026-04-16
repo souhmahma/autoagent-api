@@ -21,10 +21,9 @@ It leverages **Gemini 2.5 Flash** to break down complex tasks into logical steps
 #### Terminal (ReAct Loop)
 ![Terminal](./screenshots/terminal.png)
 
-#### Programming Question
+#### Questions
 ![Question Prog](./screenshots/question_prog.png)
 
-#### Weather Tool Example
 ![Question Weather](./screenshots/question_weather.png)
 
 ---
@@ -159,10 +158,9 @@ npm install
 npm run dev
 ```
 
-
 ---
+## 👤 Author
 
-## 📝 License
+**Souhail HMAHMA** — Full Stack Developer
 
-This project is licensed under the **MIT License**.  
-See the `LICENSE` file for details.
+🌐 [souhail3.vercel.app](https://souhail3.vercel.app) · 💼 [LinkedIn](https://linkedin.com/in/souhail-hmahma) · 🐙 [GitHub](https://github.com/souhmahma)
