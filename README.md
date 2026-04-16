@@ -32,8 +32,10 @@ It leverages **Gemini 2.5 Flash** to break down complex tasks into logical steps
 
 #### Admin Dashboard
 ![Dashboard Admin](./screenshots/dashboard_admin.png)
+### Admin : Manage Users
+![Dashboard Admin](./screenshots/admin_users.png)
 
-#### Session History
+#### User Session History
 ![History](./screenshots/historique.png)
 
 ---
