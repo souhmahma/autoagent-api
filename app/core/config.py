@@ -17,9 +17,14 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: Optional[str] = None
     OPENWEATHER_API_KEY: Optional[str] = None
 
+    ADMIN_USERNAME: str
+    ADMIN_PASSWORD: str
+    ADMIN_EMAIL: str
+
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"
 
 
 settings = Settings()
