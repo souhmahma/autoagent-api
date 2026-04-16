@@ -97,7 +97,7 @@ An intelligent reasoning loop:
 
 ## 🛣️ API Endpoints
 
-### 🔐 Authentication
+### Authentication
 
 | Method | Endpoint | Description |
 |--------|---------|------------|
@@ -108,7 +108,7 @@ An intelligent reasoning loop:
 
 ---
 
-### 🤖 Agent
+### Agent
 
 | Method | Endpoint | Description |
 |--------|---------|------------|
@@ -119,7 +119,7 @@ An intelligent reasoning loop:
 
 ---
 
-### 👮 Admin
+### Admin
 
 | Method | Endpoint | Description |
 |--------|---------|------------|
