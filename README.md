@@ -4,9 +4,9 @@ AutoAgent-API is an autonomous AI agent platform based on the **ReAct (Reasoning
 It leverages **Gemini 2.5 Flash** to break down complex tasks into logical steps, use tools in real time, and return structured final answers.
 
 ---
-## 📸 Screenshots
+## Screenshots
 
-### 🔐 Authentication
+### Authentication
 
 #### Login
 ![Login](./screenshots/login.png)
@@ -16,7 +16,7 @@ It leverages **Gemini 2.5 Flash** to break down complex tasks into logical steps
 
 ---
 
-### 🤖 ReAct Agent
+### ReAct Agent
 
 #### Terminal (ReAct Loop)
 ![Terminal](./screenshots/terminal.png)
@@ -28,7 +28,7 @@ It leverages **Gemini 2.5 Flash** to break down complex tasks into logical steps
 
 ---
 
-### 📊 Dashboard & History
+### Dashboard & History
 
 #### Admin Dashboard
 ![Dashboard Admin](./screenshots/dashboard_admin.png)
@@ -39,7 +39,7 @@ It leverages **Gemini 2.5 Flash** to break down complex tasks into logical steps
 ![History](./screenshots/historique.png)
 
 ---
-## 🚀 Features
+## Features
 
 ### 🧠 ReAct Engine (Reasoning + Acting)
 
@@ -133,7 +133,7 @@ An intelligent reasoning loop:
 
 ## 🛠️ Installation
 
-### 1️⃣ Backend
+### Backend
 
 ```bash
 python -m venv venv
@@ -152,7 +152,7 @@ SECRET_KEY="your_jwt_secret"
 
 ---
 
-### 2️⃣ Frontend
+### Frontend
 
 ```bash
 cd frontend
