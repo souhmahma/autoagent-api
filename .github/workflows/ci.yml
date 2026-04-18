@@ -9,8 +9,8 @@ on:
 env:
   PYTHON_VERSION: "3.11"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  SECRET_KEY: "b262fe9bfb9a419f40f6ca8a69f77db2baeb1c5980ae165eba5485d207aa2bbf"
-  GOOGLE_API_KEY: "dummy-key-for-testing"
+  SECRET_KEY: "b262fe9bfb9a419f40f6ca8a69f77db2baeb1c5980ae165eba5485d207aa2bdf"
+  GOOGLE_API_KEY: ""
   ADMIN_USERNAME: "admin_test"
   ADMIN_PASSWORD: "password_test_123"
   ADMIN_EMAIL: "admin@test.com"
