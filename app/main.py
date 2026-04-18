@@ -7,7 +7,6 @@ from app.api.routes import admin, agent, auth
 from app.core.config import settings
 from app.core.database import Base, SessionLocal, engine
 from app.core.security import hash_password
-
 from app.models.user import User
 
 
