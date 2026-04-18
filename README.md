@@ -161,6 +161,18 @@ npm run dev
 ```
 
 ---
+## 🧪 Tests
+| Fichier | Type | Couvre |
+|---|---|---|
+| `test_calculator.py` | Unit | Outil calculatrice |
+| `test_security.py` | Unit | JWT + bcrypt |
+| `test_summarizer.py` | Unit | Outil summarizer |
+| `test_auth_endpoints.py` | Intégration | `/auth/*` |
+| `test_agent_endpoints.py` | Intégration | `/agent/*` |
+| `test_admin_endpoints.py` | Intégration | `/admin/*` |
+| `test_full_journey.py` | E2E | Parcours complet |
+![History](./screenshots/tests.png)
+
 ## 👤 Author
 
 **Souhail HMAHMA** — Full Stack Developer
