@@ -171,6 +171,7 @@ npm run dev
 | `test_agent_endpoints.py` | Intégration | `/agent/*` |
 | `test_admin_endpoints.py` | Intégration | `/admin/*` |
 | `test_full_journey.py` | E2E | Parcours complet |
+---
 ![History](./screenshots/tests.png)
 
 ## 👤 Author
