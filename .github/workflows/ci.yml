@@ -43,7 +43,7 @@ jobs:
         run: black --check app/ --line-length 100
 
       - name: Check import order
-        run: isort --check-only app/
+        run: isort --check-only app/ --profile black
 
   # ─── JOB 2: Unit Tests ───────────────────────────────────────────────────
   unit-tests:
