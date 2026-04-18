@@ -1,0 +1,200 @@
+name: AutoAgent API — CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # ─── JOB 1: Lint ──────────────────────────────────────────────────────────
+  lint:
+    name: Lint & Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
+
+      - name: Install linters
+        run: pip install flake8 black isort
+
+      - name: Run flake8
+        run: flake8 app/ --max-line-length=100 --exclude=__pycache__
+
+      - name: Check black formatting
+        run: black --check app/
+
+      - name: Check import order
+        run: isort --check-only app/
+
+  # ─── JOB 2: Unit Tests ───────────────────────────────────────────────────
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run unit tests
+        env:
+          SECRET_KEY: "b262fe9bfb9a419f40f6ca8a69f77db2baeb1c5980ae165eba5485d207aa2bbf"
+          DATABASE_URL: "sqlite:///./test_unit.db"
+        run: |
+          pytest tests/unit/ -v --cov=app --cov-report=xml -m "not integration and not e2e"
+
+      - name: Upload unit coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.xml
+          flags: unit
+          name: unit-coverage
+
+  # ─── JOB 3: Integration Tests ────────────────────────────────────────────
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run integration tests
+        env:
+          SECRET_KEY: "b262fe9bfb9a419f40f6ca8a69f77db2baeb1c5980ae165eba5485d207aa2bbf"
+          DATABASE_URL: "sqlite:///./test_integration.db"
+        run: pytest tests/integration/ -v --cov=app --cov-report=xml
+
+      - name: Upload integration coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.xml
+          flags: integration
+          name: integration-coverage
+
+  # ─── JOB 4: E2E Tests ────────────────────────────────────────────────────
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: integration-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run E2E tests
+        env:
+          SECRET_KEY: "b262fe9bfb9a419f40f6ca8a69f77db2baeb1c5980ae165eba5485d207aa2bbf"
+          DATABASE_URL: "sqlite:///./test_e2e.db"
+        run: pytest tests/e2e/ -v
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: htmlcov/
+
+  # ─── JOB 5: Security Scan ────────────────────────────────────────────────
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install bandit
+        run: pip install bandit
+
+      - name: Run bandit security scan
+        run: bandit -r app/ -ll --exclude app/tests
+
+  # ─── JOB 6: Docker Build ─────────────────────────────────────────────────
+  docker-build:
+    name: Docker Build Check
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t autoagent-api:${{ github.sha }} .
+
+      - name: Test Docker image starts
+        run: |
+          docker run -d --name test-api \
+            -e SECRET_KEY=b262fe9bfb9a419f40f6ca8a69f77db2baeb1c5980ae165eba5485d207aa2bbf \
+            -e DATABASE_URL=sqlite:///./test.db \
+            -p 8000:8000 \
+            autoagent-api:${{ github.sha }}
+          sleep 5
+          curl -f http://localhost:8000/health || exit 1
+          docker stop test-api
+
+  # ─── JOB 7: Deploy (main only) ───────────────────────────────────────────
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [e2e-tests, docker-build, security]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy notification
+        run: |
+          echo "✅ All tests passed. Ready to deploy autoagent-api."
+          echo "SHA: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+          # Add your deployment command here:
+          # e.g. ssh user@server "cd /app && git pull && docker-compose up -d --build"

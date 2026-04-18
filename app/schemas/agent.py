@@ -1,11 +1,11 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Any
 from datetime import datetime
 from app.models.session import SessionStatus
 
 
 class AgentRunRequest(BaseModel):
-    task: str
+    task: str = Field(..., min_length=1)
     max_steps: int = 8
 
 
