@@ -8,6 +8,11 @@ on:
 
 env:
   PYTHON_VERSION: "3.11"
+  # Supprime les warnings Node.js 20 et prépare le passage à Node 24
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Variables globales pour les tests
+  SECRET_KEY: "b262fe9bfb9a419f40f6ca8a69f77db2baeb1c5980ae165eba5485d207aa2bbf"
+  GOOGLE_API_KEY: "dummy-key-for-testing" # Évite que l'agent plante au démarrage
 
 jobs:
   # ─── JOB 1: Lint ──────────────────────────────────────────────────────────
@@ -53,12 +58,6 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
-
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
@@ -66,7 +65,6 @@ jobs:
 
       - name: Run unit tests
         env:
-          SECRET_KEY: "b262fe9bfb9a419f40f6ca8a69f77db2baeb1c5980ae165eba5485d207aa2bbf"
           DATABASE_URL: "sqlite:///./test_unit.db"
         run: |
           pytest tests/unit/ -v --cov=app --cov-report=xml -m "not integration and not e2e"
@@ -74,9 +72,9 @@ jobs:
       - name: Upload unit coverage
         uses: codecov/codecov-action@v4
         with:
+          token: ${{ secrets.CODECOV_TOKEN }} # Optionnel, selon ta config Codecov
           file: coverage.xml
           flags: unit
-          name: unit-coverage
 
   # ─── JOB 3: Integration Tests ────────────────────────────────────────────
   integration-tests:
@@ -98,16 +96,8 @@ jobs:
 
       - name: Run integration tests
         env:
-          SECRET_KEY: "b262fe9bfb9a419f40f6ca8a69f77db2baeb1c5980ae165eba5485d207aa2bbf"
           DATABASE_URL: "sqlite:///./test_integration.db"
         run: pytest tests/integration/ -v --cov=app --cov-report=xml
-
-      - name: Upload integration coverage
-        uses: codecov/codecov-action@v4
-        with:
-          file: coverage.xml
-          flags: integration
-          name: integration-coverage
 
   # ─── JOB 4: E2E Tests ────────────────────────────────────────────────────
   e2e-tests:
@@ -129,16 +119,8 @@ jobs:
 
       - name: Run E2E tests
         env:
-          SECRET_KEY: "b262fe9bfb9a419f40f6ca8a69f77db2baeb1c5980ae165eba5485d207aa2bbf"
           DATABASE_URL: "sqlite:///./test_e2e.db"
         run: pytest tests/e2e/ -v
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-results
-          path: htmlcov/
 
   # ─── JOB 5: Security Scan ────────────────────────────────────────────────
   security:
@@ -147,11 +129,6 @@ jobs:
     needs: lint
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install bandit
         run: pip install bandit
@@ -173,12 +150,13 @@ jobs:
       - name: Test Docker image starts
         run: |
           docker run -d --name test-api \
-            -e SECRET_KEY=b262fe9bfb9a419f40f6ca8a69f77db2baeb1c5980ae165eba5485d207aa2bbf \
+            -e SECRET_KEY=${{ env.SECRET_KEY }} \
             -e DATABASE_URL=sqlite:///./test.db \
+            -e GOOGLE_API_KEY=dummy-key \
             -p 8000:8000 \
             autoagent-api:${{ github.sha }}
-          sleep 5
-          curl -f http://localhost:8000/health || exit 1
+          sleep 10
+          curl -f http://localhost:8000/health || (docker logs test-api && exit 1)
           docker stop test-api
 
   # ─── JOB 7: Deploy (main only) ───────────────────────────────────────────
@@ -189,12 +167,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
     steps:
-      - uses: actions/checkout@v4
-
       - name: Deploy notification
         run: |
-          echo "✅ All tests passed. Ready to deploy autoagent-api."
+          echo "✅ Tous les tests sont au vert. Déploiement autorisé."
           echo "SHA: ${{ github.sha }}"
-          echo "Branch: ${{ github.ref_name }}"
-          # Add your deployment command here:
-          # e.g. ssh user@server "cd /app && git pull && docker-compose up -d --build"
