@@ -40,7 +40,7 @@ jobs:
         run: flake8 app/ --max-line-length=100 --exclude=__pycache__
 
       - name: Check black formatting
-        run: black --check app/
+        run: black --check app/ --line-length 100
 
       - name: Check import order
         run: isort --check-only app/
@@ -72,7 +72,7 @@ jobs:
       - name: Upload unit coverage
         uses: codecov/codecov-action@v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }} # Optionnel, selon ta config Codecov
+          token: ${{ secrets.CODECOV_TOKEN }}
           file: coverage.xml
           flags: unit
 
