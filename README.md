@@ -170,7 +170,7 @@ npm run dev
 | `test_auth_endpoints.py` | Intégration | `/auth/*` |
 | `test_agent_endpoints.py` | Intégration | `/agent/*` |
 | `test_admin_endpoints.py` | Intégration | `/admin/*` |
-| `test_full_journey.py` | E2E | Parcours partiel |
+| `test_full_journey.py` | E2E | health + swagger + root |
 ---
 ![History](./screenshots/tests.png)
 
