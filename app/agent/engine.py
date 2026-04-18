@@ -41,9 +41,7 @@ def _parse_llm_output(text: str) -> Dict[str, Any]:
     """Parse LLM output into structured step dict."""
     result = {"thought": "", "action": None, "action_input": None, "final_answer": None}
 
-    thought_match = re.search(
-        r"Thought:\s*(.+?)(?=\nAction:|\nFinal Answer:|$)", text, re.DOTALL
-    )
+    thought_match = re.search(r"Thought:\s*(.+?)(?=\nAction:|\nFinal Answer:|$)", text, re.DOTALL)
     if thought_match:
         result["thought"] = thought_match.group(1).strip()
 
@@ -132,8 +130,7 @@ async def run_agent(task: str, max_steps: int = 8) -> Dict[str, Any]:
         conversation += f"Thought: {parsed['thought']}\n"
         if parsed["action"]:
             conversation += (
-                f"Action: {parsed['action']}\n"
-                f"Action Input: {parsed['action_input']}\n"
+                f"Action: {parsed['action']}\n" f"Action Input: {parsed['action_input']}\n"
             )
         conversation += f"Observation: {observation}\n\n"
 

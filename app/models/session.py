@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import (JSON, Column, DateTime, Enum, ForeignKey, Integer, Text)
+from sqlalchemy import JSON, Column, DateTime, Enum, ForeignKey, Integer, Text
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base

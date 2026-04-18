@@ -8,8 +8,7 @@ TOOLS_REGISTRY = {
         "fn": calculate,
         "async": False,
         "description": (
-            "Evaluate a mathematical expression. "
-            "Input: a math expression string like '(3+5)*2'."
+            "Evaluate a mathematical expression. " "Input: a math expression string like '(3+5)*2'."
         ),
     },
     "weather": {
