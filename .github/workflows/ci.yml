@@ -154,12 +154,14 @@ jobs:
             -e SECRET_KEY=${{ env.SECRET_KEY }} \
             -e DATABASE_URL=sqlite:///./test.db \
             -e GOOGLE_API_KEY=dummy-key \
+            -e ADMIN_USERNAME=${{ env.ADMIN_USERNAME }} \
+            -e ADMIN_PASSWORD=${{ env.ADMIN_PASSWORD }} \
+            -e ADMIN_EMAIL=${{ env.ADMIN_EMAIL }} \
             -p 8000:8000 \
             autoagent-api:${{ github.sha }}
           sleep 10
           curl -f http://localhost:8000/health || (docker logs test-api && exit 1)
           docker stop test-api
-
   # ─── JOB 7: Deploy (main only) ───────────────────────────────────────────
   deploy:
     name: Deploy to Production
