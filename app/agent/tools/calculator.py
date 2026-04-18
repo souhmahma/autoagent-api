@@ -1,6 +1,5 @@
 import ast
 import operator
-from typing import Union
 
 SAFE_OPS = {
     ast.Add: operator.add,

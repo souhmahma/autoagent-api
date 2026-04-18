@@ -1,5 +1,6 @@
-import httpx
 from urllib.parse import quote
+
+import httpx
 
 
 async def web_search(query: str) -> str:
@@ -37,8 +38,7 @@ async def web_search(query: str) -> str:
 
         if not parts:
             return (
-                f"No direct results found for '{query}'. "
-                "Try rephrasing or being more specific."
+                f"No direct results found for '{query}'. " "Try rephrasing or being more specific."
             )
 
         return "\n\n".join(parts)

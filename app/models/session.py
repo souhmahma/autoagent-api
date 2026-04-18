@@ -1,7 +1,9 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON, Enum
-from sqlalchemy.orm import relationship
-from datetime import datetime
 import enum
+from datetime import datetime
+
+from sqlalchemy import (JSON, Column, DateTime, Enum, ForeignKey, Integer, Text)
+from sqlalchemy.orm import relationship
+
 from app.core.database import Base
 
 
@@ -18,7 +20,7 @@ class AgentSession(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     task = Column(Text, nullable=False)
     status = Column(Enum(SessionStatus), default=SessionStatus.running)
-    steps = Column(JSON, default=list)       # List of ReAct steps (thought/action/observation)
+    steps = Column(JSON, default=list)  # List of ReAct steps (thought/action/observation)
     final_answer = Column(Text, nullable=True)
     tools_used = Column(JSON, default=list)  # Track which tools were called
     created_at = Column(DateTime, default=datetime.utcnow)

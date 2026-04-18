@@ -1,13 +1,16 @@
+from datetime import datetime
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime
-from app.core.database import get_db
-from app.api.deps import get_current_user
-from app.models.user import User
-from app.models.session import AgentSession, SessionStatus
-from app.schemas.agent import AgentRunRequest, AgentRunResponse, AgentSessionOut
+
 from app.agent.engine import run_agent
-from typing import List
+from app.api.deps import get_current_user
+from app.core.database import get_db
+from app.models.session import AgentSession, SessionStatus
+from app.models.user import User
+from app.schemas.agent import (AgentRunRequest, AgentRunResponse,
+                               AgentSessionOut)
 
 router = APIRouter(prefix="/agent", tags=["Agent"])
 
@@ -67,10 +70,14 @@ def get_session(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    session = db.query(AgentSession).filter(
-        AgentSession.id == session_id,
-        AgentSession.user_id == current_user.id,
-    ).first()
+    session = (
+        db.query(AgentSession)
+        .filter(
+            AgentSession.id == session_id,
+            AgentSession.user_id == current_user.id,
+        )
+        .first()
+    )
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
@@ -82,10 +89,14 @@ def delete_session(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    session = db.query(AgentSession).filter(
-        AgentSession.id == session_id,
-        AgentSession.user_id == current_user.id,
-    ).first()
+    session = (
+        db.query(AgentSession)
+        .filter(
+            AgentSession.id == session_id,
+            AgentSession.user_id == current_user.id,
+        )
+        .first()
+    )
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     db.delete(session)

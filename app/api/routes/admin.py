@@ -1,12 +1,14 @@
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
-from app.core.database import get_db
+
 from app.api.deps import require_admin
-from app.models.user import User
+from app.core.database import get_db
 from app.models.session import AgentSession
-from app.schemas.user import UserOut, UserUpdate
+from app.models.user import User
 from app.schemas.agent import AgentSessionOut
+from app.schemas.user import UserOut, UserUpdate
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -46,11 +48,11 @@ def delete_user(
 ):
     if user_id == admin.id:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
-        
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     db.delete(user)
     db.commit()
     return None
@@ -70,9 +72,12 @@ def stats(
     _: User = Depends(require_admin),
 ):
     from app.models.session import SessionStatus
+
     total_users = db.query(User).count()
     total_sessions = db.query(AgentSession).count()
-    completed = db.query(AgentSession).filter(AgentSession.status == SessionStatus.completed).count()
+    completed = (
+        db.query(AgentSession).filter(AgentSession.status == SessionStatus.completed).count()
+    )
     failed = db.query(AgentSession).filter(AgentSession.status == SessionStatus.failed).count()
 
     return {
@@ -82,4 +87,3 @@ def stats(
         "failed_sessions": failed,
         "success_rate": round((completed / total_sessions * 100) if total_sessions > 0 else 0, 1),
     }
- 

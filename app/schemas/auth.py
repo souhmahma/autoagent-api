@@ -1,10 +1,12 @@
-from pydantic import BaseModel, EmailStr, field_validator
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, EmailStr, field_validator
+
 from app.models.user import UserRole
 
-
 # ── Auth ──────────────────────────────────────────────
+
 
 class RegisterRequest(BaseModel):
     username: str
@@ -49,6 +51,7 @@ class AccessTokenResponse(BaseModel):
 
 
 # ── User ──────────────────────────────────────────────
+
 
 class UserResponse(BaseModel):
     id: int

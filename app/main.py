@@ -1,29 +1,29 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from app.core.config import settings
-from app.core.database import engine, Base, SessionLocal
-from app.api.routes import auth, agent, admin
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.security import hash_password 
+from app.api.routes import admin, agent, auth
+from app.core.config import settings
+from app.core.database import Base, SessionLocal, engine
+from app.core.security import hash_password
 
 from app.models.user import User
-from app.models.session import AgentSession # Important pour que Base.metadata les voit
+
 
 def create_admin_user():
     db = SessionLocal()
     try:
         admin_obj = db.query(User).filter(User.username == settings.ADMIN_USERNAME).first()
-        
+
         if not admin_obj:
             print("🚀 Creating initial admin user...")
             new_admin = User(
                 username=settings.ADMIN_USERNAME,
                 email=settings.ADMIN_EMAIL,
                 hashed_password=hash_password(settings.ADMIN_PASSWORD),
-                role="admin",  
-                is_active=True
+                role="admin",
+                is_active=True,
             )
             db.add(new_admin)
             db.commit()
@@ -35,12 +35,13 @@ def create_admin_user():
     finally:
         db.close()
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
-    
+
     create_admin_user()
-    
+
     print("✅ Database tables ready")
     yield
     print("👋 Shutting down AutoAgent API")

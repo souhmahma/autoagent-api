@@ -1,9 +1,8 @@
-import json
 import re
-from typing import List, Dict, Any, Optional
-from app.core.config import settings
-from app.agent.tools import TOOLS_REGISTRY
+from typing import Any, Dict, List, Optional
 
+from app.agent.tools import TOOLS_REGISTRY
+from app.core.config import settings
 
 SYSTEM_PROMPT = """You are AutoAgent, an autonomous AI assistant that solves tasks step by step.
 
@@ -42,7 +41,9 @@ def _parse_llm_output(text: str) -> Dict[str, Any]:
     """Parse LLM output into structured step dict."""
     result = {"thought": "", "action": None, "action_input": None, "final_answer": None}
 
-    thought_match = re.search(r"Thought:\s*(.+?)(?=\nAction:|\nFinal Answer:|$)", text, re.DOTALL)
+    thought_match = re.search(
+        r"Thought:\s*(.+?)(?=\nAction:|\nFinal Answer:|$)", text, re.DOTALL
+    )
     if thought_match:
         result["thought"] = thought_match.group(1).strip()
 
@@ -55,7 +56,9 @@ def _parse_llm_output(text: str) -> Dict[str, Any]:
     if action_match:
         result["action"] = action_match.group(1).strip()
 
-    input_match = re.search(r"Action Input:\s*(.+?)(?=\n(?:Thought|Action|Final)|$)", text, re.DOTALL)
+    input_match = re.search(
+        r"Action Input:\s*(.+?)(?=\n(?:Thought|Action|Final)|$)", text, re.DOTALL
+    )
     if input_match:
         result["action_input"] = input_match.group(1).strip()
 
@@ -63,11 +66,11 @@ def _parse_llm_output(text: str) -> Dict[str, Any]:
 
 
 async def run_agent(task: str, max_steps: int = 8) -> Dict[str, Any]:
-
     if not settings.GEMINI_API_KEY:
         return _mock_agent_run(task)
 
     import google.generativeai as genai
+
     genai.configure(api_key=settings.GEMINI_API_KEY)
     model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
@@ -119,7 +122,8 @@ async def run_agent(task: str, max_steps: int = 8) -> Dict[str, Any]:
             except Exception as e:
                 observation = f"Tool error: {str(e)}"
         elif parsed["action"]:
-            observation = f"Unknown tool '{parsed['action']}'. Available: {', '.join(tool_names)}"
+            available = ", ".join(tool_names)
+            observation = f"Unknown tool '{parsed['action']}'. Available: {available}"
 
         step_record["observation"] = observation
         steps.append(step_record)
@@ -127,7 +131,10 @@ async def run_agent(task: str, max_steps: int = 8) -> Dict[str, Any]:
         # Append to conversation for next step
         conversation += f"Thought: {parsed['thought']}\n"
         if parsed["action"]:
-            conversation += f"Action: {parsed['action']}\nAction Input: {parsed['action_input']}\n"
+            conversation += (
+                f"Action: {parsed['action']}\n"
+                f"Action Input: {parsed['action_input']}\n"
+            )
         conversation += f"Observation: {observation}\n\n"
 
     else:
@@ -142,6 +149,15 @@ async def run_agent(task: str, max_steps: int = 8) -> Dict[str, Any]:
 
 def _mock_agent_run(task: str) -> Dict[str, Any]:
     """Returns a mock ReAct trace when no API key is set."""
+    msg = "[MOCK] No GEMINI_API_KEY set. Configure it in .env to enable real AI reasoning."
+    final_msg = (
+        f"[MOCK RESPONSE] Task received: '{task}'. "
+        "Set GEMINI_API_KEY in your .env file to get real AI-powered responses."
+    )
+    final_ans = (
+        f"[MOCK] Task: '{task}' — Add your GEMINI_API_KEY to .env to enable the real ReAct agent."
+    )
+
     return {
         "steps": [
             {
@@ -149,7 +165,7 @@ def _mock_agent_run(task: str) -> Dict[str, Any]:
                 "thought": f"I need to analyze the task: '{task}'",
                 "action": "web_search",
                 "action_input": task,
-                "observation": "[MOCK] No GEMINI_API_KEY set. Configure it in .env to enable real AI reasoning.",
+                "observation": msg,
             },
             {
                 "step": 2,
@@ -157,9 +173,9 @@ def _mock_agent_run(task: str) -> Dict[str, Any]:
                 "action": None,
                 "action_input": None,
                 "observation": None,
-                "final_answer": f"[MOCK RESPONSE] Task received: '{task}'. Set GEMINI_API_KEY in your .env file to get real AI-powered responses.",
+                "final_answer": final_msg,
             },
         ],
-        "final_answer": f"[MOCK] Task: '{task}' — Add your GEMINI_API_KEY to .env to enable the real ReAct agent.",
+        "final_answer": final_ans,
         "tools_used": ["web_search"],
     }
