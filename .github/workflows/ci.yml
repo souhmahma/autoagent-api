@@ -43,6 +43,9 @@ jobs:
       - name: Check black formatting
         run: black --check app/ --line-length 100
 
+      - name: Check import order
+        run: isort --check-only app/ --profile black
+
   # ─── JOB 2: Unit Tests ───────────────────────────────────────────────────
   unit-tests:
     name: Unit Tests
@@ -59,27 +62,20 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r app/requirements.txt
-          pip install -r app/requirements-test.txt
+          pip install -r requirements-test.txt
 
       - name: Run unit tests
         env:
           DATABASE_URL: "sqlite:///./test_unit.db"
-          # On ajoute 'app' au PYTHONPATH pour que pytest trouve les modules
-          PYTHONPATH: ./app 
         run: |
-          pytest app/tests/unit/ -v --cov=app --cov-report=xml
+          pytest tests/unit/ -v --cov=app --cov-report=xml -m "not integration and not e2e"
 
-  # ─── JOB 6: Docker Build ─────────────────────────────────────────────────
-  docker-build:
-    name: Docker Build Check
-    runs-on: ubuntu-latest
-    needs: [unit-tests, integration-tests]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build Docker image
-        # Le point (.) indique que le contexte de build est le dossier app/
-        run: docker build -t autoagent-api:${{ github.sha }} ./app
+      - name: Upload unit coverage
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: coverage.xml
+          flags: unit
 
   # ─── JOB 3: Integration Tests ────────────────────────────────────────────
   integration-tests:
@@ -96,7 +92,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          pip install -r app/requirements.txt
           pip install -r requirements-test.txt
 
       - name: Run integration tests
@@ -119,7 +115,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          pip install -r app/requirements.txt
           pip install -r requirements-test.txt
 
       - name: Run E2E tests
