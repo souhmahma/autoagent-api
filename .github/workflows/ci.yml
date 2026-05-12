@@ -161,7 +161,7 @@ jobs:
   deploy:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: [e2e-tests, docker-build, security]
+    needs: [e2e-tests, docker-compose-check, security]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
     steps:
