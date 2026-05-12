@@ -138,30 +138,25 @@ jobs:
         run: bandit -r app/ -ll --exclude app/tests
 
   # ─── JOB 6: Docker Build ─────────────────────────────────────────────────
-  docker-build:
-    name: Docker Build Check
+  docker-compose-check:
+    name: Docker Compose Build Check
     runs-on: ubuntu-latest
     needs: [unit-tests, integration-tests]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Docker image
-        run: docker build -t autoagent-api:${{ github.sha }} .
+      - name: Build with Docker Compose
+        run: docker-compose build
 
-      - name: Test Docker image starts
+      - name: Verify Services
         run: |
-          docker run -d --name test-api \
-            -e SECRET_KEY=${{ env.SECRET_KEY }} \
-            -e DATABASE_URL=sqlite:///./test.db \
-            -e GOOGLE_API_KEY=dummy-key \
-            -e ADMIN_USERNAME=${{ env.ADMIN_USERNAME }} \
-            -e ADMIN_PASSWORD=${{ env.ADMIN_PASSWORD }} \
-            -e ADMIN_EMAIL=${{ env.ADMIN_EMAIL }} \
-            -p 8000:8000 \
-            autoagent-api:${{ github.sha }}
+          docker-compose up -d
           sleep 10
-          curl -f http://localhost:8000/health || (docker logs test-api && exit 1)
-          docker stop test-api
+          # Check backend health
+          curl -f http://localhost:8000/health || (docker-compose logs backend && exit 1)
+          # Check frontend access
+          curl -f http://localhost:80 || (docker-compose logs frontend && exit 1)
+          docker-compose down
   # ─── JOB 7: Deploy (main only) ───────────────────────────────────────────
   deploy:
     name: Deploy to Production
