@@ -2,7 +2,7 @@ services:
   backend:
     build:
       context: .
-      dockerfile: /app/Dockerfile 
+      dockerfile: app/Dockerfile 
     ports:
       - "8000:8000"
     environment:
@@ -18,7 +18,7 @@ services:
   frontend:
     build:
       context: .
-      dockerfile: /app/Dockerfilefront
+      dockerfile: frontend/Dockerfile
     ports:
       - "80:80"
     depends_on:
