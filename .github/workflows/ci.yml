@@ -153,9 +153,9 @@ jobs:
           docker compose up -d
           sleep 10
           # Check backend health
-          curl -f http://localhost:8000/health || (docker-compose logs backend && exit 1)
+          curl -f http://localhost:8000/health || (docker compose logs backend && exit 1)
           # Check frontend access
-          curl -f http://localhost:80 || (docker-compose logs frontend && exit 1)
+          curl -f http://localhost:80 || (docker compose logs frontend && exit 1)
           docker compose down
   # ─── JOB 7: Deploy (main only) ───────────────────────────────────────────
   deploy:
