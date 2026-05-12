@@ -1,0 +1,22 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile 
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env  
+    environment:
+      - DATABASE_URL=sqlite:///./test.db
+    volumes:
+      - ./app:/app/app 
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfilefront
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
