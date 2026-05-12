@@ -1,4 +1,5 @@
 # AutoAgent-API
+[![AutoAgent API — CI](https://github.com/souhmahma/autoagent-api/actions/workflows/ci.yml/badge.svg)](https://github.com/souhmahma/autoagent-api/actions/workflows/ci.yml)
 
 AutoAgent-API is an autonomous AI agent platform based on the **ReAct (Reasoning + Acting)** pattern.  
 It leverages **Gemini 2.5 Flash** to break down complex tasks into logical steps, use tools in real time, and return structured final answers.
