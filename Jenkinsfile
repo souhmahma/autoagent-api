@@ -3,8 +3,7 @@
 // ╚══════════════════════════════════════════════════════════════════╝
 
 pipeline {
-
-    // On utilise l'agent par défaut de Jenkins pour éviter le bug de montage de volume
+    // Utilisation de l'agent par défaut de Jenkins
     agent any
 
     environment {
@@ -12,13 +11,6 @@ pipeline {
         REGISTRY_URL     = "${env.REGISTRY_URL ?: 'registry.example.com/autoagent-api'}"
         IMAGE_BACKEND    = "${REGISTRY_URL}/backend"
         IMAGE_FRONTEND   = "${REGISTRY_URL}/frontend"
-
-        // Credentials Jenkins
-        SECRET_KEY       = credentials('secret-key')
-        ADMIN_USERNAME   = credentials('admin-username')
-        ADMIN_PASSWORD   = credentials('admin-password')
-        ADMIN_EMAIL      = credentials('admin-email')
-        GEMINI_API_KEY   = credentials('gemini-api-key')
     }
 
     options {
@@ -33,7 +25,7 @@ pipeline {
 
     stages {
 
-        // ── Stage 0 : Checkout ──────────────────────────────────────
+        // ── Stage 0 : Checkout & Setup ──────────────────────────────
         stage('Checkout') {
             steps {
                 checkout scm
@@ -46,8 +38,7 @@ pipeline {
             }
         }
 
-        // ── Stage 1 : Lint & Tests via Docker Local ────────────────
-        // Au lieu de demander à Jenkins de gérer l'agent Docker, on lance un conteneur éphémère à la main
+        // ── Stage 1 : Lint & Tests ──────────────────────────────────
         stage('Lint & Tests') {
             steps {
                 echo "Exécution des tests et du linting dans un conteneur isolé..."
@@ -66,8 +57,6 @@ pipeline {
             post {
                 always {
                     junit allowEmptyResults: true, testResults: '**/test-results/*.xml'
-                    // facultatif selon tes plugins installés :
-                    // publishCoverage adapters: [coberturaAdapter('coverage.xml')]
                 }
             }
         }
@@ -116,6 +105,7 @@ pipeline {
                         frontendTags = ["${IMAGE_FRONTEND}:${safeBranch}"]
                     }
 
+                    // Injection des identifiants du registre uniquement au moment du besoin
                     withCredentials([usernamePassword(
                         credentialsId: 'registry-creds',
                         usernameVariable: 'REG_USER',
@@ -154,33 +144,42 @@ pipeline {
             }
             steps {
                 script {
-                    try {
-                        sh """
-                            docker run -d --name smoke-backend-${BUILD_NUMBER} \\
-                                -p 8001:8000 \\
-                                -e DATABASE_URL="sqlite:///./smoke.db" \\
-                                -e SECRET_KEY="${SECRET_KEY}" \\
-                                -e ADMIN_USERNAME="${ADMIN_USERNAME}" \\
-                                -e ADMIN_PASSWORD="${ADMIN_PASSWORD}" \\
-                                -e ADMIN_EMAIL="${ADMIN_EMAIL}" \\
-                                -e GEMINI_API_KEY="${GEMINI_API_KEY}" \\
-                                ${env.BACKEND_IMAGE_TAG}
-                        """
-                        sh 'sleep 8'
-                        sh "docker exec smoke-backend-${BUILD_NUMBER} python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""
-                        echo "✓ Backend health OK"
+                    // Centralisation sécurisée de l'ensemble de vos credentials applicatifs
+                    withCredentials([
+                        string(credentialsId: 'secret-key', variable: 'SEC_KEY'),
+                        string(credentialsId: 'admin-username', variable: 'A_USER'),
+                        string(credentialsId: 'admin-password', variable: 'A_PASS'),
+                        string(credentialsId: 'admin-email', variable: 'A_MAIL'),
+                        string(credentialsId: 'gemini-api-key', variable: 'GEMINI_KEY')
+                    ]) {
+                        try {
+                            sh """
+                                docker run -d --name smoke-backend-${BUILD_NUMBER} \\
+                                    -p 8001:8000 \\
+                                    -e DATABASE_URL="sqlite:///./smoke.db" \\
+                                    -e SECRET_KEY="\$SEC_KEY" \\
+                                    -e ADMIN_USERNAME="\$A_USER" \\
+                                    -e ADMIN_PASSWORD="\$A_PASS" \\
+                                    -e ADMIN_EMAIL="\$A_MAIL" \\
+                                    -e GEMINI_API_KEY="\$GEMINI_KEY" \\
+                                    ${env.BACKEND_IMAGE_TAG}
+                            """
+                            sh 'sleep 8'
+                            sh "docker exec smoke-backend-${BUILD_NUMBER} python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""
+                            echo "✓ Backend health OK"
 
-                        sh """
-                            docker run -d --name smoke-frontend-${BUILD_NUMBER} \\
-                                -p 8080:80 \\
-                                ${env.FRONTEND_IMAGE_TAG}
-                        """
-                        sh 'sleep 5'
-                        sh "docker exec smoke-frontend-${BUILD_NUMBER} wget -qO- http://localhost:80 > /dev/null"
-                        echo "✓ Frontend health OK"
+                            sh """
+                                docker run -d --name smoke-frontend-${BUILD_NUMBER} \\
+                                    -p 8080:80 \\
+                                    ${env.FRONTEND_IMAGE_TAG}
+                            """
+                            sh 'sleep 5'
+                            sh "docker exec smoke-frontend-${BUILD_NUMBER} wget -qO- http://localhost:80 > /dev/null"
+                            echo "✓ Frontend health OK"
 
-                    } finally {
-                        sh "docker rm -f smoke-backend-${BUILD_NUMBER} smoke-frontend-${BUILD_NUMBER} 2>/dev/null || true"
+                        } finally {
+                            sh "docker rm -f smoke-backend-${BUILD_NUMBER} smoke-frontend-${BUILD_NUMBER} 2>/dev/null || true"
+                        }
                     }
                 }
             }
@@ -204,7 +203,14 @@ pipeline {
             }
         }
         always {
-            cleanWs()
+            script {
+                // Protection critique contre le crash d'absence de contexte de workspace
+                try {
+                    cleanWs()
+                } catch (Exception e) {
+                    echo "Note: Nettoyage du workspace ignoré car aucun exécuteur ou dossier actif n'était alloué (${e.message})."
+                }
+            }
         }
     }
 }
