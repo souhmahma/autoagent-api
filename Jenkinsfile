@@ -4,22 +4,16 @@
 
 pipeline {
 
-    // ── Agent global : Docker-in-Docker ─────────────────────────────
-    agent {
-        docker {
-            image 'docker:26'
-            args  '--privileged -v /var/run/docker.sock:/var/run/docker.sock'
-        }
-    }
+    // On utilise l'agent par défaut de Jenkins pour éviter le bug de montage de volume
+    agent any
 
-    // ── Variables globales Statiques ────────────────────────────────
     environment {
         PYTHON_VERSION   = '3.11'
         REGISTRY_URL     = "${env.REGISTRY_URL ?: 'registry.example.com/autoagent-api'}"
         IMAGE_BACKEND    = "${REGISTRY_URL}/backend"
         IMAGE_FRONTEND   = "${REGISTRY_URL}/frontend"
 
-        // Credentials Jenkins injectés de manière isolée
+        // Credentials Jenkins
         SECRET_KEY       = credentials('secret-key')
         ADMIN_USERNAME   = credentials('admin-username')
         ADMIN_PASSWORD   = credentials('admin-password')
@@ -39,116 +33,58 @@ pipeline {
 
     stages {
 
-        // ── Stage 0 : Checkout & Init Dynamique ─────────────────────
+        // ── Stage 0 : Checkout ──────────────────────────────────────
         stage('Checkout') {
             steps {
                 checkout scm
                 script {
-                    // Calcul dynamique et injection sécurisée dans l'environnement global du build
                     def gitCommit = env.GIT_COMMIT ?: sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
                     env.SHORT_SHA = gitCommit.take(8)
-                    
                     def currentBranch = env.GIT_BRANCH ?: env.BRANCH_NAME ?: 'unknown'
-                    echo "Branch détectée : ${currentBranch} | SHA calculé : ${env.SHORT_SHA}"
+                    echo "Branch : ${currentBranch} | SHA : ${env.SHORT_SHA}"
                 }
             }
         }
 
-        // ── Stage 1 : Lint ──────────────────────────────────────────
-        stage('Lint') {
-            agent {
-                docker {
-                    image 'python:3.11-slim'
-                    reuseNode true
-                }
-            }
+        // ── Stage 1 : Lint & Tests via Docker Local ────────────────
+        // Au lieu de demander à Jenkins de gérer l'agent Docker, on lance un conteneur éphémère à la main
+        stage('Lint & Tests') {
             steps {
-                sh '''
-                    pip install --quiet flake8 black isort
-                    echo "── flake8 ──────────────────────────────"
-                    flake8 app/ --max-line-length=100 --exclude=__pycache__
-                    echo "── black ───────────────────────────────"
-                    black --check app/ --line-length 100
-                    echo "── isort ───────────────────────────────"
-                    isort --check-only app/ --profile black
-                '''
-            }
-        }
-
-        // ── Stage 2 : Tests ─────────────────────────────────────────
-        stage('Tests') {
-            agent {
-                docker {
-                    image 'python:3.11-slim'
-                    reuseNode true
-                }
-            }
-            environment {
-                PIP_CACHE_DIR = "${WORKSPACE}/.cache/pip"
-            }
-            steps {
-                sh 'pip install --quiet -r app/requirements.txt -r requirements-test.txt'
-
-                sh '''
-                    echo "── Unit tests ──────────────────────────"
-                    DATABASE_URL="sqlite:///./test_unit.db" \
-                    pytest tests/unit/ -v \
-                        --cov=app \
-                        --cov-report=xml:coverage-unit.xml \
-                        --cov-report=term-missing \
-                        -m "not integration and not e2e"
-                '''
-
-                sh '''
-                    echo "── Integration tests ───────────────────"
-                    DATABASE_URL="sqlite:///./test_integration.db" \
-                    pytest tests/integration/ -v \
-                        --cov=app \
-                        --cov-report=xml:coverage-integration.xml \
-                        --cov-report=term-missing
-                '''
-
-                sh '''
-                    echo "── E2E tests ───────────────────────────"
-                    DATABASE_URL="sqlite:///./test_e2e.db" \
-                    pytest tests/e2e/ -v
-                '''
+                echo "Exécution des tests et du linting dans un conteneur isolé..."
+                sh """
+                    docker run --rm -v ${WORKSPACE}:/workspace -w /workspace python:3.11-slim sh -c "
+                        pip install --quiet flake8 black isort pytest pytest-cov &&
+                        echo '── Linting ──' &&
+                        flake8 app/ --max-line-length=100 --exclude=__pycache__ &&
+                        black --check app/ --line-length 100 &&
+                        isort --check-only app/ --profile black &&
+                        echo '── Unit & Integration Tests ──' &&
+                        DATABASE_URL='sqlite:///./test.db' pytest tests/ -v --cov=app --cov-report=xml:coverage.xml
+                    "
+                """
             }
             post {
                 always {
                     junit allowEmptyResults: true, testResults: '**/test-results/*.xml'
-                    publishCoverage adapters: [
-                        coberturaAdapter('coverage-unit.xml'),
-                        coberturaAdapter('coverage-integration.xml')
-                    ]
+                    // facultatif selon tes plugins installés :
+                    // publishCoverage adapters: [coberturaAdapter('coverage.xml')]
                 }
             }
         }
 
-        // ── Stage 3 : Security ──────────────────────────────────────
+        // ── Stage 2 : Security ──────────────────────────────────────
         stage('Security') {
-            agent {
-                docker {
-                    image 'python:3.11-slim'
-                    reuseNode true
-                }
-            }
             steps {
-                sh '''
-                    pip install --quiet bandit
-                    echo "── bandit ───────────────────────────────"
-                    bandit -r app/ -ll --exclude app/tests -f json -o bandit-report.json || true
-                    bandit -r app/ -ll --exclude app/tests
-                '''
-            }
-            post {
-                always {
-                    archiveArtifacts artifacts: 'bandit-report.json', allowEmptyArchive: true
-                }
+                sh """
+                    docker run --rm -v ${WORKSPACE}:/workspace -w /workspace python:3.11-slim sh -c "
+                        pip install --quiet bandit &&
+                        bandit -r app/ -ll --exclude app/tests
+                    "
+                """
             }
         }
 
-        // ── Stage 4 : Build & Push images ───────────────────────────
+        // ── Stage 3 : Build & Push images ───────────────────────────
         stage('Build & Push') {
             when {
                 anyOf {
@@ -190,39 +126,23 @@ pipeline {
 
                     // Build Backend
                     echo "Building backend → ${backendTags}"
-                    sh "docker pull ${IMAGE_BACKEND}:latest 2>/dev/null || true"
                     def backendTagArgs = backendTags.collect { "--tag ${it}" }.join(' ')
-                    sh """
-                        docker build \\
-                            --file app/Dockerfile \\
-                            --cache-from ${IMAGE_BACKEND}:latest \\
-                            --build-arg BUILDKIT_INLINE_CACHE=1 \\
-                            ${backendTagArgs} \\
-                            .
-                    """
+                    sh "docker build --file app/Dockerfile ${backendTagArgs} ."
                     backendTags.each { sh "docker push ${it}" }
 
                     // Build Frontend
                     echo "Building frontend → ${frontendTags}"
-                    sh "docker pull ${IMAGE_FRONTEND}:latest 2>/dev/null || true"
                     def frontendTagArgs = frontendTags.collect { "--tag ${it}" }.join(' ')
-                    sh """
-                        docker build \\
-                            --file frontend/Dockerfile \\
-                            --cache-from ${IMAGE_FRONTEND}:latest \\
-                            --build-arg BUILDKIT_INLINE_CACHE=1 \\
-                            ${frontendTagArgs} \\
-                            .
-                    """
+                    sh "docker build --file frontend/Dockerfile ${frontendTagArgs} ."
                     frontendTags.each { sh "docker push ${it}" }
 
-                    env.BACKEND_IMAGE_TAG  = backendTags.find { it.contains(sha) } ?: backendTags[0]
-                    env.FRONTEND_IMAGE_TAG = frontendTags.find { it.contains(sha) } ?: frontendTags[0]
+                    env.BACKEND_IMAGE_TAG  = backendTags[0]
+                    env.FRONTEND_IMAGE_TAG = frontendTags[0]
                 }
             }
         }
 
-        // ── Stage 5 : Verify (smoke test) ───────────────────────────
+        // ── Stage 4 : Verify (smoke test) ───────────────────────────
         stage('Verify') {
             when {
                 anyOf {
@@ -247,11 +167,7 @@ pipeline {
                                 ${env.BACKEND_IMAGE_TAG}
                         """
                         sh 'sleep 8'
-                        sh """
-                            docker exec smoke-backend-${BUILD_NUMBER} \\
-                                python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" \\
-                            || (docker logs smoke-backend-${BUILD_NUMBER} && exit 1)
-                        """
+                        sh "docker exec smoke-backend-${BUILD_NUMBER} python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""
                         echo "✓ Backend health OK"
 
                         sh """
@@ -260,11 +176,7 @@ pipeline {
                                 ${env.FRONTEND_IMAGE_TAG}
                         """
                         sh 'sleep 5'
-                        sh """
-                            docker exec smoke-frontend-${BUILD_NUMBER} \\
-                                wget -qO- http://localhost:80 > /dev/null \\
-                            || (docker logs smoke-frontend-${BUILD_NUMBER} && exit 1)
-                        """
+                        sh "docker exec smoke-frontend-${BUILD_NUMBER} wget -qO- http://localhost:80 > /dev/null"
                         echo "✓ Frontend health OK"
 
                     } finally {
@@ -275,7 +187,7 @@ pipeline {
         }
     }
 
-    // ── POST — Actions de clôture isolées ───────────────────────────
+    // ── POST ────────────────────────────────────────────────────────
     post {
         success {
             script {
@@ -292,13 +204,7 @@ pipeline {
             }
         }
         always {
-            script {
-                try {
-                    cleanWs()
-                } catch (Exception e) {
-                    echo "Note: Nettoyage du workspace ignoré ou géré hors contexte Node."
-                }
-            }
+            cleanWs()
         }
     }
 }
