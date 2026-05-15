@@ -55,7 +55,7 @@ pipeline {
     // ── Déclencheurs ────────────────────────────────────────────────
     triggers {
         // Polling SCM toutes les 5 min si pas de webhook configuré
-        // pollSCM('H/5 * * * *')
+        pollSCM('H/1 * * * *')
         // Ou webhook GitHub/GitLab → laisser vide et configurer le webhook
     }
 
