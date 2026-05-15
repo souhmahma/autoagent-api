@@ -8,7 +8,9 @@ pipeline {
 
     environment {
         PYTHON_VERSION   = '3.11'
-        REGISTRY_URL     = "${env.REGISTRY_URL ?: 'registry.example.com/autoagent-api'}"
+        // URL sans slash final pour éviter les doubles slashes (//) dans les tags d'images
+        REGISTRY_URL     = "registry.gitlab.com/souhmahma-group/autoagent-api"
+        
         IMAGE_BACKEND    = "${REGISTRY_URL}/backend"
         IMAGE_FRONTEND   = "${REGISTRY_URL}/frontend"
     }
@@ -84,8 +86,11 @@ pipeline {
         stage('Build & Push') {
             when {
                 anyOf {
-                    branch 'main'
-                    branch 'develop'
+                    // Expression régulière pour matcher 'main', 'origin/main', 'develop', 'origin/develop', etc.
+                    expression { 
+                        def branch = env.GIT_BRANCH ?: env.BRANCH_NAME ?: ''
+                        return branch ==~ /.*(main|develop).*/ 
+                    }
                     buildingTag()
                     changeRequest()
                 }
@@ -100,7 +105,7 @@ pipeline {
                     if (env.TAG_NAME) {
                         backendTags  = ["${IMAGE_BACKEND}:${env.TAG_NAME}", "${IMAGE_BACKEND}:latest"]
                         frontendTags = ["${IMAGE_FRONTEND}:${env.TAG_NAME}", "${IMAGE_FRONTEND}:latest"]
-                    } else if (currentBranch == 'origin/main' || currentBranch == 'main') {
+                    } else if (currentBranch ==~ /.*main.*/) {
                         backendTags  = ["${IMAGE_BACKEND}:latest", "${IMAGE_BACKEND}:${sha}"]
                         frontendTags = ["${IMAGE_FRONTEND}:latest", "${IMAGE_FRONTEND}:${sha}"]
                     } else if (currentBranch ==~ /.*develop.*/) {
@@ -112,7 +117,7 @@ pipeline {
                         frontendTags = ["${IMAGE_FRONTEND}:${safeBranch}"]
                     }
 
-                    // Authentification au registre Docker
+                    // Authentification au registre Docker GitLab (Extrait l'hôte 'registry.gitlab.com')
                     withCredentials([usernamePassword(
                         credentialsId: 'registry-creds',
                         usernameVariable: 'REG_USER',
@@ -142,8 +147,11 @@ pipeline {
         stage('Verify') {
             when {
                 anyOf {
-                    branch 'main'
-                    branch 'develop'
+                    // Même expression régulière robuste pour s'assurer que l'étape s'exécute sur main/develop
+                    expression { 
+                        def branch = env.GIT_BRANCH ?: env.BRANCH_NAME ?: ''
+                        return branch ==~ /.*(main|develop).*/ 
+                    }
                     buildingTag()
                     changeRequest()
                 }
