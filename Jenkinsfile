@@ -49,14 +49,11 @@ pipeline {
             artifactNumToKeepStr: '5'
         ))
         disableConcurrentBuilds()            // pas deux builds en même temps sur la même branche
-    //    ansiColor('xterm')                   // couleurs dans les logs (plugin AnsiColor)
     }
 
     // ── Déclencheurs ────────────────────────────────────────────────
     triggers {
-        // Polling SCM toutes les 5 min si pas de webhook configuré
         pollSCM('H/1 * * * *')
-        // Ou webhook GitHub/GitLab → laisser vide et configurer le webhook
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -68,7 +65,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
-                sh 'echo "Branch : ${GIT_BRANCH} | SHA : ${SHORT_SHA}"'
+                sh 'echo "Branch : ${env.GIT_BRANCH ?: env.BRANCH_NAME} | SHA : ${SHORT_SHA}"'
             }
         }
 
@@ -94,9 +91,6 @@ pipeline {
         }
 
         // ── Stage 2 : Tests ─────────────────────────────────────────
-        // Les trois jobs tournent dans le même stage mais sont
-        // explicitement séquentiels via des steps ordonnées.
-        // Pour les paralléliser, voir commentaire en bas de fichier.
         stage('Tests') {
             agent {
                 docker {
@@ -108,8 +102,6 @@ pipeline {
                 PIP_CACHE_DIR = "${WORKSPACE}/.cache/pip"
             }
             steps {
-
-                // ── Install deps une seule fois ──────────────────
                 sh 'pip install --quiet -r app/requirements.txt -r requirements-test.txt'
 
                 // ── Unit tests ───────────────────────────────────
@@ -142,9 +134,7 @@ pipeline {
             }
             post {
                 always {
-                    // Publie les rapports de couverture dans Jenkins
-                    junit allowEmptyResults: true,
-                          testResults: '**/test-results/*.xml'
+                    junit allowEmptyResults: true, testResults: '**/test-results/*.xml'
                     publishCoverage adapters: [
                         coberturaAdapter('coverage-unit.xml'),
                         coberturaAdapter('coverage-integration.xml')
@@ -171,54 +161,42 @@ pipeline {
             }
             post {
                 always {
-                    archiveArtifacts artifacts: 'bandit-report.json',
-                                     allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'bandit-report.json', allowEmptyArchive: true
                 }
             }
         }
 
         // ── Stage 4 : Build & Push images ───────────────────────────
         stage('Build & Push') {
-            // Ce stage utilise l'agent Docker global (docker:26 + socket)
             when {
                 anyOf {
                     branch 'main'
                     branch 'develop'
                     buildingTag()
-                    changeRequest()    // PR / MR
+                    changeRequest()
                 }
             }
             steps {
                 script {
-
-                    // ── Calcul des tags selon le contexte ─────────
                     def backendTags  = []
                     def frontendTags = []
+                    def currentBranch = env.GIT_BRANCH ?: env.BRANCH_NAME
 
                     if (env.TAG_NAME) {
-                        // Push d'un tag Git  ex: v1.2.0
-                        backendTags  = ["${IMAGE_BACKEND}:${env.TAG_NAME}",
-                                        "${IMAGE_BACKEND}:latest"]
-                        frontendTags = ["${IMAGE_FRONTEND}:${env.TAG_NAME}",
-                                        "${IMAGE_FRONTEND}:latest"]
-                    } else if (env.GIT_BRANCH == 'origin/main' || env.GIT_BRANCH == 'main') {
-                        backendTags  = ["${IMAGE_BACKEND}:latest",
-                                        "${IMAGE_BACKEND}:${SHORT_SHA}"]
-                        frontendTags = ["${IMAGE_FRONTEND}:latest",
-                                        "${IMAGE_FRONTEND}:${SHORT_SHA}"]
-                    } else if (env.GIT_BRANCH ==~ /.*develop.*/) {
-                        backendTags  = ["${IMAGE_BACKEND}:develop",
-                                        "${IMAGE_BACKEND}:${SHORT_SHA}"]
-                        frontendTags = ["${IMAGE_FRONTEND}:develop",
-                                        "${IMAGE_FRONTEND}:${SHORT_SHA}"]
+                        backendTags  = ["${IMAGE_BACKEND}:${env.TAG_NAME}", "${IMAGE_BACKEND}:latest"]
+                        frontendTags = ["${IMAGE_FRONTEND}:${env.TAG_NAME}", "${IMAGE_FRONTEND}:latest"]
+                    } else if (currentBranch == 'origin/main' || currentBranch == 'main') {
+                        backendTags  = ["${IMAGE_BACKEND}:latest", "${IMAGE_BACKEND}:${SHORT_SHA}"]
+                        frontendTags = ["${IMAGE_FRONTEND}:latest", "${IMAGE_FRONTEND}:${SHORT_SHA}"]
+                    } else if (currentBranch ==~ /.*develop.*/) {
+                        backendTags  = ["${IMAGE_BACKEND}:develop", "${IMAGE_BACKEND}:${SHORT_SHA}"]
+                        frontendTags = ["${IMAGE_FRONTEND}:develop", "${IMAGE_FRONTEND}:${SHORT_SHA}"]
                     } else {
-                        // Branche feature ou MR
-                        def safeBranch = env.GIT_BRANCH.replaceAll('[^a-zA-Z0-9._-]', '-')
+                        def safeBranch = currentBranch.replaceAll('[^a-zA-Z0-9._-]', '-')
                         backendTags  = ["${IMAGE_BACKEND}:${safeBranch}"]
                         frontendTags = ["${IMAGE_FRONTEND}:${safeBranch}"]
                     }
 
-                    // ── Login registry ────────────────────────────
                     withCredentials([usernamePassword(
                         credentialsId: 'registry-creds',
                         usernameVariable: 'REG_USER',
@@ -230,7 +208,6 @@ pipeline {
                     // ── Build Backend ─────────────────────────────
                     echo "Building backend → ${backendTags}"
                     sh "docker pull ${IMAGE_BACKEND}:latest 2>/dev/null || true"
-
                     def backendTagArgs = backendTags.collect { "--tag ${it}" }.join(' ')
                     sh """
                         docker build \\
@@ -245,7 +222,6 @@ pipeline {
                     // ── Build Frontend ────────────────────────────
                     echo "Building frontend → ${frontendTags}"
                     sh "docker pull ${IMAGE_FRONTEND}:latest 2>/dev/null || true"
-
                     def frontendTagArgs = frontendTags.collect { "--tag ${it}" }.join(' ')
                     sh """
                         docker build \\
@@ -257,12 +233,8 @@ pipeline {
                     """
                     frontendTags.each { sh "docker push ${it}" }
 
-                    // ── Sauvegarde des tags exacts pour verify ────
                     env.BACKEND_IMAGE_TAG  = backendTags.find { it.contains(SHORT_SHA) } ?: backendTags[0]
                     env.FRONTEND_IMAGE_TAG = frontendTags.find { it.contains(SHORT_SHA) } ?: frontendTags[0]
-
-                    echo "Backend  pushed → ${env.BACKEND_IMAGE_TAG}"
-                    echo "Frontend pushed → ${env.FRONTEND_IMAGE_TAG}"
                 }
             }
         }
@@ -315,54 +287,35 @@ pipeline {
                         echo "✓ Frontend health OK"
 
                     } finally {
-                        // Nettoyage garanti même si le stage plante
                         sh "docker rm -f smoke-backend-${BUILD_NUMBER} smoke-frontend-${BUILD_NUMBER} 2>/dev/null || true"
                     }
                 }
             }
         }
-
     }
-    // ════════════════════════════════════════════════════════════════
-    //  POST — notifications globales
-    // ════════════════════════════════════════════════════════════════
+
+    // ── POST — notifications et clean globaux ───────────────────────
     post {
         success {
-            echo "✅ Pipeline terminée avec succès — ${GIT_BRANCH} @ ${SHORT_SHA}"
+            script {
+                def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'unknown'
+                echo "✅ Pipeline terminée avec succès — ${branch} @ ${SHORT_SHA}"
+            }
         }
         failure {
-            echo "❌ Pipeline échouée — ${GIT_BRANCH} @ ${SHORT_SHA}"
-            // Décommenter pour Slack (plugin Slack Notification requis) :
-            // slackSend channel: '#ci-alerts',
-            //            color: 'danger',
-            //            message: "❌ Build échoué : ${JOB_NAME} #${BUILD_NUMBER} (${GIT_BRANCH})"
+            script {
+                def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'unknown'
+                echo "❌ Pipeline échouée — ${branch} @ ${SHORT_SHA}"
+            }
         }
         always {
-            // Nettoyage workspace pour ne pas saturer le disque
-            cleanWs()
+            script {
+                try {
+                    cleanWs()
+                } catch (Exception e) {
+                    echo "Note: Impossible de vider le workspace ou déjà nettoyé (hors contexte Node) : ${e.message}"
+                }
+            }
         }
     }
 }
-
-// ════════════════════════════════════════════════════════════════════
-//  NOTE : Tests en parallèle (optionnel)
-//
-//  Remplacer le stage 'Tests' par :
-//
-//  stage('Tests') {
-//      parallel {
-//          stage('Unit') {
-//              agent { docker { image 'python:3.11-slim'; reuseNode true } }
-//              steps { sh 'pytest tests/unit/ ...' }
-//          }
-//          stage('Integration') {
-//              agent { docker { image 'python:3.11-slim'; reuseNode true } }
-//              steps { sh 'pytest tests/integration/ ...' }
-//          }
-//      }
-//  }
-//
-//  Attention : les tests parallèles ne garantissent plus l'ordre
-//  unit → integration → e2e. À utiliser seulement si les tests
-//  sont vraiment indépendants.
-// ════════════════════════════════════════════════════════════════════
