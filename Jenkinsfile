@@ -31,7 +31,7 @@ pipeline {
         REGISTRY_URL     = "${env.REGISTRY_URL ?: 'registry.example.com/autoagent-api'}"
         IMAGE_BACKEND    = "${REGISTRY_URL}/backend"
         IMAGE_FRONTEND   = "${REGISTRY_URL}/frontend"
-        SHORT_SHA        = "${env.GIT_COMMIT?.take(8) ?: 'unknown'}"
+        SHORT_SHA        = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(8) : 'unknown'}"
 
         // Credentials Jenkins injectés comme variables d'env
         SECRET_KEY       = credentials('secret-key')
