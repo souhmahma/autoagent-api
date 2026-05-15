@@ -49,7 +49,7 @@ pipeline {
             artifactNumToKeepStr: '5'
         ))
         disableConcurrentBuilds()            // pas deux builds en même temps sur la même branche
-        ansiColor('xterm')                   // couleurs dans les logs (plugin AnsiColor)
+    //    ansiColor('xterm')                   // couleurs dans les logs (plugin AnsiColor)
     }
 
     // ── Déclencheurs ────────────────────────────────────────────────
