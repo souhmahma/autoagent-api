@@ -57,7 +57,7 @@ pipeline {
                         isort --check-only app/ --profile black &&
                         
                         echo '── Unit & Integration Tests ──' &&
-                        DATABASE_URL='sqlite:///./test.db' pytest tests/ -v --cov=app --cov-report=xml:coverage.xml
+                        DATABASE_URL='sqlite:///./test.db' ADMIN_USERNAME='test_admin' ADMIN_PASSWORD='test_password' ADMIN_EMAIL='admin@test.com' SECRET_KEY='test_secret_key' pytest tests/ -v --cov=app --cov-report=xml:coverage.xml
                     "
                 """
             }
