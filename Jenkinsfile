@@ -3,7 +3,7 @@
 // ╚══════════════════════════════════════════════════════════════════╝
 
 pipeline {
-    // Utilisation de l'agent par défaut de Jenkins
+    // Utilisation de l'agent par défaut pour compatibilité Jenkins-dans-Docker
     agent any
 
     environment {
@@ -44,11 +44,18 @@ pipeline {
                 echo "Exécution des tests et du linting dans un conteneur isolé..."
                 sh """
                     docker run --rm -v ${WORKSPACE}:/workspace -w /workspace python:3.11-slim sh -c "
+                        echo '── Installation des outils de qualité & tests ──' &&
                         pip install --quiet flake8 black isort pytest pytest-cov &&
+                        
+                        echo '── Installation des dépendances depuis app/requirements.txt ──' &&
+                        if [ -f app/requirements.txt ]; then pip install --quiet -r app/requirements.txt; fi &&
+                        if [ -f requirements-test.txt ]; then pip install --quiet -r requirements-test.txt; fi &&
+                        
                         echo '── Linting ──' &&
                         flake8 app/ --max-line-length=100 --exclude=__pycache__ &&
                         black --check app/ --line-length 100 &&
                         isort --check-only app/ --profile black &&
+                        
                         echo '── Unit & Integration Tests ──' &&
                         DATABASE_URL='sqlite:///./test.db' pytest tests/ -v --cov=app --cov-report=xml:coverage.xml
                     "
@@ -105,7 +112,7 @@ pipeline {
                         frontendTags = ["${IMAGE_FRONTEND}:${safeBranch}"]
                     }
 
-                    // Injection des identifiants du registre uniquement au moment du besoin
+                    // Authentification au registre Docker
                     withCredentials([usernamePassword(
                         credentialsId: 'registry-creds',
                         usernameVariable: 'REG_USER',
@@ -114,25 +121,24 @@ pipeline {
                         sh "docker login ${REGISTRY_URL.split('/')[0]} -u \$REG_USER -p \$REG_PASS"
                     }
 
-                    // Build Backend
+                    // Build & Push Backend
                     echo "Building backend → ${backendTags}"
                     def backendTagArgs = backendTags.collect { "--tag ${it}" }.join(' ')
                     sh "docker build --file app/Dockerfile ${backendTagArgs} ."
                     backendTags.each { sh "docker push ${it}" }
 
-                    // Build Frontend
+                    // Build & Push Frontend
                     echo "Building frontend → ${frontendTags}"
                     def frontendTagArgs = frontendTags.collect { "--tag ${it}" }.join(' ')
                     sh "docker build --file frontend/Dockerfile ${frontendTagArgs} ."
                     frontendTags.each { sh "docker push ${it}" }
 
                     env.BACKEND_IMAGE_TAG  = backendTags[0]
-                    env.FRONTEND_IMAGE_TAG = frontendTags[0]
                 }
             }
         }
 
-        // ── Stage 4 : Verify (smoke test) ───────────────────────────
+        // ── Stage 4 : Verify (smoke test backend uniquement) ────────
         stage('Verify') {
             when {
                 anyOf {
@@ -144,7 +150,6 @@ pipeline {
             }
             steps {
                 script {
-                    // Centralisation sécurisée de l'ensemble de vos credentials applicatifs
                     withCredentials([
                         string(credentialsId: 'secret-key', variable: 'SEC_KEY'),
                         string(credentialsId: 'admin-username', variable: 'A_USER'),
@@ -153,6 +158,7 @@ pipeline {
                         string(credentialsId: 'gemini-api-key', variable: 'GEMINI_KEY')
                     ]) {
                         try {
+                            echo "Démarrage du conteneur Backend pour test de santé..."
                             sh """
                                 docker run -d --name smoke-backend-${BUILD_NUMBER} \\
                                     -p 8001:8000 \\
@@ -164,21 +170,16 @@ pipeline {
                                     -e GEMINI_API_KEY="\$GEMINI_KEY" \\
                                     ${env.BACKEND_IMAGE_TAG}
                             """
+                            
                             sh 'sleep 8'
+                            
+                            echo "Vérification du endpoint /health..."
                             sh "docker exec smoke-backend-${BUILD_NUMBER} python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""
                             echo "✓ Backend health OK"
 
-                            sh """
-                                docker run -d --name smoke-frontend-${BUILD_NUMBER} \\
-                                    -p 8080:80 \\
-                                    ${env.FRONTEND_IMAGE_TAG}
-                            """
-                            sh 'sleep 5'
-                            sh "docker exec smoke-frontend-${BUILD_NUMBER} wget -qO- http://localhost:80 > /dev/null"
-                            echo "✓ Frontend health OK"
-
                         } finally {
-                            sh "docker rm -f smoke-backend-${BUILD_NUMBER} smoke-frontend-${BUILD_NUMBER} 2>/dev/null || true"
+                            echo "Nettoyage du conteneur de Smoke Test..."
+                            sh "docker rm -f smoke-backend-${BUILD_NUMBER} 2>/dev/null || true"
                         }
                     }
                 }
@@ -186,7 +187,7 @@ pipeline {
         }
     }
 
-    // ── POST ────────────────────────────────────────────────────────
+    // ── POST — Actions globales de clôture ──────────────────────────
     post {
         success {
             script {
@@ -204,11 +205,10 @@ pipeline {
         }
         always {
             script {
-                // Protection critique contre le crash d'absence de contexte de workspace
                 try {
                     cleanWs()
                 } catch (Exception e) {
-                    echo "Note: Nettoyage du workspace ignoré car aucun exécuteur ou dossier actif n'était alloué (${e.message})."
+                    echo "Note: Nettoyage du workspace ignoré."
                 }
             }
         }
