@@ -1,23 +1,10 @@
 // ╔══════════════════════════════════════════════════════════════════╗
 // ║              AutoAgent API — Jenkinsfile                         ║
 // ╚══════════════════════════════════════════════════════════════════╝
-//
-// Credentials à créer dans Jenkins → Manage → Credentials :
-//   secret-key        (Secret text)  — SECRET_KEY applicative
-//   admin-username    (Secret text)  — ADMIN_USERNAME
-//   admin-password    (Secret text)  — ADMIN_PASSWORD
-//   admin-email       (Secret text)  — ADMIN_EMAIL
-//   gemini-api-key    (Secret text)  — GEMINI_API_KEY
-//   registry-creds    (Username/Password) — login registre Docker
-//
-// Variable globale à définir dans Jenkins → Manage → System :
-//   REGISTRY_URL  ex: registry.gitlab.com/mongroupe/autoagent-api
-//                 ou  docker.io/monuser  pour Docker Hub
 
 pipeline {
 
     // ── Agent global : Docker-in-Docker ─────────────────────────────
-    // Chaque stage peut surcharger l'agent avec sa propre image.
     agent {
         docker {
             image 'docker:26'
@@ -25,15 +12,14 @@ pipeline {
         }
     }
 
-    // ── Variables globales ──────────────────────────────────────────
+    // ── Variables globales Statiques ────────────────────────────────
     environment {
         PYTHON_VERSION   = '3.11'
         REGISTRY_URL     = "${env.REGISTRY_URL ?: 'registry.example.com/autoagent-api'}"
         IMAGE_BACKEND    = "${REGISTRY_URL}/backend"
         IMAGE_FRONTEND   = "${REGISTRY_URL}/frontend"
-        SHORT_SHA        = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(8) : 'unknown'}"
 
-        // Credentials Jenkins injectés comme variables d'env
+        // Credentials Jenkins injectés de manière isolée
         SECRET_KEY       = credentials('secret-key')
         ADMIN_USERNAME   = credentials('admin-username')
         ADMIN_PASSWORD   = credentials('admin-password')
@@ -41,31 +27,30 @@ pipeline {
         GEMINI_API_KEY   = credentials('gemini-api-key')
     }
 
-    // ── Options globales ────────────────────────────────────────────
     options {
-        timeout(time: 45, unit: 'MINUTES')   // pipeline max 45 min
-        buildDiscarder(logRotator(
-            numToKeepStr: '20',              // garde les 20 derniers builds
-            artifactNumToKeepStr: '5'
-        ))
-        disableConcurrentBuilds()            // pas deux builds en même temps sur la même branche
+        timeout(time: 45, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '5'))
+        disableConcurrentBuilds()
     }
 
-    // ── Déclencheurs ────────────────────────────────────────────────
     triggers {
         pollSCM('H/1 * * * *')
     }
 
-    // ════════════════════════════════════════════════════════════════
-    //  STAGES
-    // ════════════════════════════════════════════════════════════════
     stages {
 
-        // ── Stage 0 : Checkout ──────────────────────────────────────
+        // ── Stage 0 : Checkout & Init Dynamique ─────────────────────
         stage('Checkout') {
             steps {
                 checkout scm
-                sh 'echo "Branch : ${env.GIT_BRANCH ?: env.BRANCH_NAME} | SHA : ${SHORT_SHA}"'
+                script {
+                    // Calcul dynamique et injection sécurisée dans l'environnement global du build
+                    def gitCommit = env.GIT_COMMIT ?: sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+                    env.SHORT_SHA = gitCommit.take(8)
+                    
+                    def currentBranch = env.GIT_BRANCH ?: env.BRANCH_NAME ?: 'unknown'
+                    echo "Branch détectée : ${currentBranch} | SHA calculé : ${env.SHORT_SHA}"
+                }
             }
         }
 
@@ -74,7 +59,7 @@ pipeline {
             agent {
                 docker {
                     image 'python:3.11-slim'
-                    reuseNode true            // même workspace que l'agent parent
+                    reuseNode true
                 }
             }
             steps {
@@ -104,7 +89,6 @@ pipeline {
             steps {
                 sh 'pip install --quiet -r app/requirements.txt -r requirements-test.txt'
 
-                // ── Unit tests ───────────────────────────────────
                 sh '''
                     echo "── Unit tests ──────────────────────────"
                     DATABASE_URL="sqlite:///./test_unit.db" \
@@ -115,7 +99,6 @@ pipeline {
                         -m "not integration and not e2e"
                 '''
 
-                // ── Integration tests ────────────────────────────
                 sh '''
                     echo "── Integration tests ───────────────────"
                     DATABASE_URL="sqlite:///./test_integration.db" \
@@ -125,7 +108,6 @@ pipeline {
                         --cov-report=term-missing
                 '''
 
-                // ── E2E tests ────────────────────────────────────
                 sh '''
                     echo "── E2E tests ───────────────────────────"
                     DATABASE_URL="sqlite:///./test_e2e.db" \
@@ -180,17 +162,18 @@ pipeline {
                 script {
                     def backendTags  = []
                     def frontendTags = []
-                    def currentBranch = env.GIT_BRANCH ?: env.BRANCH_NAME
+                    def currentBranch = env.GIT_BRANCH ?: env.BRANCH_NAME ?: 'unknown'
+                    def sha = env.SHORT_SHA ?: 'unknown'
 
                     if (env.TAG_NAME) {
                         backendTags  = ["${IMAGE_BACKEND}:${env.TAG_NAME}", "${IMAGE_BACKEND}:latest"]
                         frontendTags = ["${IMAGE_FRONTEND}:${env.TAG_NAME}", "${IMAGE_FRONTEND}:latest"]
                     } else if (currentBranch == 'origin/main' || currentBranch == 'main') {
-                        backendTags  = ["${IMAGE_BACKEND}:latest", "${IMAGE_BACKEND}:${SHORT_SHA}"]
-                        frontendTags = ["${IMAGE_FRONTEND}:latest", "${IMAGE_FRONTEND}:${SHORT_SHA}"]
+                        backendTags  = ["${IMAGE_BACKEND}:latest", "${IMAGE_BACKEND}:${sha}"]
+                        frontendTags = ["${IMAGE_FRONTEND}:latest", "${IMAGE_FRONTEND}:${sha}"]
                     } else if (currentBranch ==~ /.*develop.*/) {
-                        backendTags  = ["${IMAGE_BACKEND}:develop", "${IMAGE_BACKEND}:${SHORT_SHA}"]
-                        frontendTags = ["${IMAGE_FRONTEND}:develop", "${IMAGE_FRONTEND}:${SHORT_SHA}"]
+                        backendTags  = ["${IMAGE_BACKEND}:develop", "${IMAGE_BACKEND}:${sha}"]
+                        frontendTags = ["${IMAGE_FRONTEND}:develop", "${IMAGE_FRONTEND}:${sha}"]
                     } else {
                         def safeBranch = currentBranch.replaceAll('[^a-zA-Z0-9._-]', '-')
                         backendTags  = ["${IMAGE_BACKEND}:${safeBranch}"]
@@ -205,7 +188,7 @@ pipeline {
                         sh "docker login ${REGISTRY_URL.split('/')[0]} -u \$REG_USER -p \$REG_PASS"
                     }
 
-                    // ── Build Backend ─────────────────────────────
+                    // Build Backend
                     echo "Building backend → ${backendTags}"
                     sh "docker pull ${IMAGE_BACKEND}:latest 2>/dev/null || true"
                     def backendTagArgs = backendTags.collect { "--tag ${it}" }.join(' ')
@@ -219,7 +202,7 @@ pipeline {
                     """
                     backendTags.each { sh "docker push ${it}" }
 
-                    // ── Build Frontend ────────────────────────────
+                    // Build Frontend
                     echo "Building frontend → ${frontendTags}"
                     sh "docker pull ${IMAGE_FRONTEND}:latest 2>/dev/null || true"
                     def frontendTagArgs = frontendTags.collect { "--tag ${it}" }.join(' ')
@@ -233,8 +216,8 @@ pipeline {
                     """
                     frontendTags.each { sh "docker push ${it}" }
 
-                    env.BACKEND_IMAGE_TAG  = backendTags.find { it.contains(SHORT_SHA) } ?: backendTags[0]
-                    env.FRONTEND_IMAGE_TAG = frontendTags.find { it.contains(SHORT_SHA) } ?: frontendTags[0]
+                    env.BACKEND_IMAGE_TAG  = backendTags.find { it.contains(sha) } ?: backendTags[0]
+                    env.FRONTEND_IMAGE_TAG = frontendTags.find { it.contains(sha) } ?: frontendTags[0]
                 }
             }
         }
@@ -252,7 +235,6 @@ pipeline {
             steps {
                 script {
                     try {
-                        // ── Smoke test backend ────────────────────
                         sh """
                             docker run -d --name smoke-backend-${BUILD_NUMBER} \\
                                 -p 8001:8000 \\
@@ -272,7 +254,6 @@ pipeline {
                         """
                         echo "✓ Backend health OK"
 
-                        // ── Smoke test frontend ───────────────────
                         sh """
                             docker run -d --name smoke-frontend-${BUILD_NUMBER} \\
                                 -p 8080:80 \\
@@ -294,18 +275,20 @@ pipeline {
         }
     }
 
-    // ── POST — notifications et clean globaux ───────────────────────
+    // ── POST — Actions de clôture isolées ───────────────────────────
     post {
         success {
             script {
-                def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'unknown'
-                echo "✅ Pipeline terminée avec succès — ${branch} @ ${SHORT_SHA}"
+                def branch = env.GIT_BRANCH ?: env.BRANCH_NAME ?: 'unknown'
+                def sha = env.SHORT_SHA ?: 'unknown'
+                echo "✅ Pipeline terminée avec succès — ${branch} @ ${sha}"
             }
         }
         failure {
             script {
-                def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'unknown'
-                echo "❌ Pipeline échouée — ${branch} @ ${SHORT_SHA}"
+                def branch = env.GIT_BRANCH ?: env.BRANCH_NAME ?: 'unknown'
+                def sha = env.SHORT_SHA ?: 'unknown'
+                echo "❌ Pipeline échouée — ${branch} @ ${sha}"
             }
         }
         always {
@@ -313,7 +296,7 @@ pipeline {
                 try {
                     cleanWs()
                 } catch (Exception e) {
-                    echo "Note: Impossible de vider le workspace ou déjà nettoyé (hors contexte Node) : ${e.message}"
+                    echo "Note: Nettoyage du workspace ignoré ou géré hors contexte Node."
                 }
             }
         }
